@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# Environment variables (SENSÍVEL)
+.env
+.env.*
+
+# Logs
+*.log
+
+# MLflow
+mlruns/
+mlflow.db
+
+# Testing / cache
+.pytest_cache/
+.coverage
+htmlcov/
