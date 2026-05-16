@@ -2,7 +2,7 @@
 
 --- 
 
--- mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+-- mlflow ui --backend-store-uri sqlite:///mlflow/mlflow.db
 
 [APAGAR]
 Não esquecer de explicar:

@@ -1,9 +1,9 @@
 import torch
-import numpy as np
 import joblib
 import mlflow
 import sqlite3
 import pandas as pd
+import numpy as np
 
 from pathlib import Path
 from src.models.lstm_model import LSTM
@@ -12,15 +12,26 @@ from src.models.lstm_model import LSTM
 # CONFIG
 # =========================
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(__file__).resolve().parents[2]
 
-MODEL_PATH = BASE_DIR / "models/lstm_model.pt"
+MODEL_PATH = BASE_DIR / "models/lstm_ohlcv.pt"
 SCALER_PATH = BASE_DIR / "models/scaler.pkl"
 DB_PATH = BASE_DIR / "data/refined/refined.db"
 
-sequence_length = 20
+FEATURE_COLUMNS = ["open", "high", "low", "close", "volume"]
+TARGET_INDEX = FEATURE_COLUMNS.index("close")
+
+SEQUENCE_LENGTH = 20
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# =========================
+# MLFLOW CONFIG
+# =========================
+
+MLFLOW_DIR = BASE_DIR / "mlflow"
+mlflow.set_tracking_uri(f"sqlite:///{MLFLOW_DIR}/mlflow.db")
+mlflow.set_experiment("lstm_stock_forecasting_ohlcv")
 
 # =========================
 # LOAD DATA
@@ -31,15 +42,23 @@ def load_data():
     df = pd.read_sql("SELECT * FROM prices", conn)
     conn.close()
 
+    df.columns = df.columns.str.lower().str.strip()
     df = df.sort_values("date")
+
     return df
 
 # =========================
-# CREATE SEQUENCE
+# LOAD MODEL + SCALER
 # =========================
 
-def create_last_sequence(data, seq_len):
-    return data[-seq_len:]
+def load_model_and_scaler():
+    scaler = joblib.load(SCALER_PATH)
+
+    model = LSTM(input_size=5).to(device)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.eval()
+
+    return model, scaler
 
 # =========================
 # INFERENCE
@@ -47,45 +66,37 @@ def create_last_sequence(data, seq_len):
 
 def run_inference():
 
-    print("\nCarregando modelo e scaler...")
+    print("\nIniciando inferência...")
 
-    scaler = joblib.load(SCALER_PATH)
-
-    model = LSTM().to(device)
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-    model.eval()
+    model, scaler = load_model_and_scaler()
 
     df = load_data()
-    values = df["close"].values.reshape(-1, 1)
+    values = df[FEATURE_COLUMNS].values
 
     scaled = scaler.transform(values)
 
-    last_seq = create_last_sequence(scaled, sequence_length)
+    last_seq = scaled[-SEQUENCE_LENGTH:]
     X = torch.tensor(last_seq, dtype=torch.float32).unsqueeze(0).to(device)
 
     with mlflow.start_run(run_name="inference_run"):
 
-        print("\nRodando inferência...")
+        print("Rodando previsão...")
 
         with torch.no_grad():
             pred = model(X).cpu().numpy()
 
-        pred_real = scaler.inverse_transform(pred)
+        # inversão correta
+        dummy = np.zeros((pred.shape[0], 5))
+        dummy[:, TARGET_INDEX] = pred[:, 0]
 
-        print(f"\nPrevisão próxima: {pred_real.flatten()[0]:.4f}")
+        pred_real = scaler.inverse_transform(dummy)[:, TARGET_INDEX]
+        predicted_value = float(pred_real[0])
 
-        # =========================
-        # LOG NO MLFLOW
-        # =========================
+        print(f"\nPrevisão próxima: {predicted_value:.4f}")
 
-        mlflow.log_param("model", "LSTM")
-        mlflow.log_param("sequence_length", sequence_length)
+        mlflow.log_metric("predicted_price", predicted_value)
 
-        mlflow.log_metric("predicted_price", float(pred_real[0][0]))
-
-        mlflow.set_tag("type", "inference")
-
-        print("\nInferência registrada no MLflow.")
+    return predicted_value
 
 # =========================
 # RUN
