@@ -176,7 +176,7 @@ Isso permite capturar padrões complexos e evitar problemas como *vanishing grad
 - Monitoramento: **val_loss**  
 - Early stopping para evitar overfitting  
 
-<br.
+<br>
 
 ### Avaliação
 
