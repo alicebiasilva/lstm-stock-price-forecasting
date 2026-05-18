@@ -4,8 +4,6 @@ Projeto de previsão de preços de ações utilizando redes neurais do tipo LSTM
 
 *  **Por:** Alice Beatriz da Silva  
 *  **Última atualização:** 17/05/2026  
-*  **Deploy:** _(adicionar link versel)_  
-*  **Apresentação:** _(adicionar link)_  
 
 <br>
 
